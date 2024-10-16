@@ -5,26 +5,48 @@ mkdir /opt/cache
 cp /etc/passwd /opt/cache/passwd
 cp /etc/group /opt/cache/group
 cp /etc/shadow /opt/cache/shadow
+cp /etc/sudoers /opt/cache/sudoers
+cp /etc/group   /opt/cache/group
 cp -r /var/log /opt/cache/log
+
+if command -v yum >/dev/null ; then
+    RHEL
+elif command -v apt-get >/dev/null ; then
+    if $( cat /etc/os-release | grep -qi Ubuntu ); then
+        UBUNTU
+    else
+        DEBIAN
+    fi
+else
+    echo "Unknown OS, cooked"
+fi
+
+UBUNTU(){
+    DEBIAN
+}
+
+DEBIAN(){
+    #apt-get install libpam0g libpam-modules libpam-modules-bin libpam-runtime -y -qq
+    apt-get install libpam-failock -y -qq
+    apt-get install libpam-cracklib -y -qq
+
+    cp Files/sudoers-DEBIAN /etc/sudoers
+}
+
+RHEL(){
+    yum install pam pam-devel pam_cracklib -y -qq
+
+    cp Files/sudoers-RHEL /etc/sudoers
+}
+
 
 # Passwords
 
-for user in $(cat /etc/passwd | grep -E "/bin/.*sh" | cut -d ':' -f 1);
-do
-        grep -q $user users.txt || (deluser $user 2> /dev/null)
-done;
-
-for user in $(cat users.txt); do
-        echo $user’:Wefwefwef123!@#’ | chpasswd;
-        chage -M 15 -m 6 -W 7 -I 5 $user;
-        rm -rf /home/$user/.ssh;
-done;
-
-for user in $(cat /etc/passwd | cut -d ':' -f 1); do
-        grep -q $user users.txt || passwd -l $user;
-        grep -q $user users.txt || crontab -u $user -l;
-
-done;
+getent passwd {1000..2000} | cut -d: -f1 > user.txt
+while read u; do
+     echo '$u:jbLXfO*^mr6oHaX' | chpasswd
+     chage -d 0 -m 7 -M 90 -I 30 -W 14
+done<user.txt
 
 passwd -l "root"
 
@@ -35,34 +57,24 @@ sed -i 's/^PASS_MIN_DAYS.*/PASS_MIN_DAYS 7/' /etc/login.defs
 sed -i 's/^PASS_WARN_AGE.*/PASS_WARN_AGE 14/' /etc/login.defs
 sed -i 's/^ENCRYPT_METHOD.*/ENCRYPT_METHOD SHA512/' /etc/login.defs
 
-apt-get install libpam-cracklib -y -qq
+cp /etc/security/pwquality.conf /opt/cache/pwquality.conf
+cp Files/pwquality.conf /etc/security/pwquality.conf
+
 cp /etc/pam.d/common-auth /opt/cache/common-auth
+cp Files/common-auth /opt/cache/common-auth
+
 cp /etc/pam.d/common-password /opt/cache/common-password
-
-echo "
-auth    required            pam_faillock.so preauth audit silent deny=3 unlock_time=600 fail_interval=900 even_deny_root
-auth    required            pam_faildelay.so delay=4000000
-auth    [success=1 default=ignore]         pam_unix.so 
-auth    [default=die]            pam_faillock.so authfail audit deny=3 unlock_time=600 fail_interval=900 even_deny_root
-auth    sufficient            pam_faillock.so authsucc audit deny=3 unlock_time=600 fail_interval=900 even_deny_root
-" > /etc/pam.d/common-auth
-
-echo "
-password requisite pam_pwquality.so retry=3 difok=8 minlen=15 dcredit=-1 ucredit=-1 lcredit=-1 ocredit=-1 minclass=4 maxrepeat=3 maxclassrepeat=5 gecoscheck=1 dictcheck=1 usercheck=1 usersubstr=3 enforcing=1 enforce_for_root
-password requisite pam_pwhistory.so remember=5 use_authtok retry=3 authtok_type=secure enforce_for_root
-password [success=1 default=ignore] pam_unix.so obscure use_authtok try_first_pass yescrypt shadow rounds=65536
-" > /etc/pam.d/common-password
+cp Files/common-password /etc/pam.d/common-password
 
 # Sysctl
-wget https://raw.githubusercontent.com/klaver/sysctl/refs/heads/master/sysctl.conf
-cp /etc/sysctl.conf > /opt/cache/sysctl.conf
-mv sysctl.conf > /etc/sysctl.conf
+cp /etc/sysctl.conf /opt/cache/sysctl.conf
+cp Files/sysctl.conf /etc/sysctl.conf
 
 # gdm3
-if [ -f /etc/gdm3/custom.conf ]; then
-    echo "AllowRoot=false" >> /etc/gdm3/custom.conf 
-	echo "DisallowTCP=true" >> /etc/gdm3/custom.conf 
-fi
+#if [ -f /etc/gdm3/custom.conf ]; then
+#    echo "AllowRoot=false" >> /etc/gdm3/custom.conf 
+#	echo "DisallowTCP=true" >> /etc/gdm3/custom.conf 
+#fi
 
 # lightdm
 if systemctl list-unit-files | grep -q lightdm; then
@@ -114,6 +126,8 @@ chmod 664 /etc/lightdm/lightdm.conf && chown root:root /etc/lightdm/lightdm.conf
 chmod 644 /etc/login.defs && chown root:root /etc/login.defs
 chmod 644 /etc/pam.d/common-auth && chown root:root /etc/pam.d/common-auth
 chmod 644 /etc/pam.d/common-password && chown root:root /etc/pam.d/common-password
+chattr +i +u /etc/passwd
+chattr +i +u /etc/shadow
 
 # Potential backdoors
 chmod og-rwx /etc/anacrontab && chown root:root /etc/anacrontab
@@ -121,6 +135,7 @@ chmod og-rwx -R /etc/cron* && chown root:root /etc/cron*
 chmod og-rwx /etc/crontab && chown root:root /etc/crontab
 chmod og-rwx /var/spool/cron/crontabs && chown root:root /var/spool/cron/crontabs
 chmod 755 /etc/rc.local && chown root:root /etc/rc.local
+chmod -R 755 /var/www/html
 
 # GRUB configuration
 chmod 755 /etc/grub.d/ && chown root:root /etc/grub.d/
@@ -152,15 +167,14 @@ chmod 755 /sbin && chown root:root /sbin
 chmod 755 /snap && chown root:root /snap
 chmod 755 /srv && chown root:root /srv
 chmod 555 /sys && chown root:root /sys
-chmod 1755 /tmp && chown root:root /tmp
+chmod 1777 /tmp && chown root:root /tmp
 chmod 755 /usr && chown root:root /usr
 chmod 755 /var && chown root:root /var
 chmod -R g-wx,o-rwx /var/log/* && chown root:root /var/log/*
 
-
-
-none /tmp tmpfs rw,noexec,nosuid,nodev 0 0
-proc /proc proc defaults,hidepid=2 0 0
+# /etc/fstab
+echo 'none /tmp tmpfs rw,noexec,nosuid,nodev 0 0' >> /etc/fstab
+echo 'proc /proc proc defaults,hidepid=2 0 0' >> /etc/fstab
 
 # remove rysnc
 apt remove rsync
