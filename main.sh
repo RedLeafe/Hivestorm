@@ -21,19 +21,19 @@ else
     echo "Unknown OS, cooked"
 fi
 
-UBUNTU(){
+UBUNTU() {
     DEBIAN
 }
 
-DEBIAN(){
-    #apt-get install libpam0g libpam-modules libpam-modules-bin libpam-runtime -y -qq
+DEBIAN() {
+    apt-get install libpam0g libpam-modules libpam-modules-bin libpam-runtime -y -qq
     apt-get install libpam-failock -y -qq
     apt-get install libpam-cracklib -y -qq
 
     cp Files/sudoers-DEBIAN /etc/sudoers
 }
 
-RHEL(){
+RHEL() {
     yum install pam pam-devel pam_cracklib -y -qq
 
     cp Files/sudoers-RHEL /etc/sudoers
@@ -42,10 +42,24 @@ RHEL(){
 
 # Passwords
 
-getent passwd {1000..2000} | cut -d: -f1 > user.txt
+pass=jbLXfs*^mr6oHaX
+
+CHANGEPASSWORD() {
+	BIN=$( which chpasswd || which passwd )
+	if echo "$BIN" | grep -qi "chpasswd"; then
+		CMD="echo \"$1:$2\" | $BIN"
+	elif echo "$BIN" | grep -qi "passwd"; then
+		CMD="printf \"$2\\n$2\\n\" | $BIN $1" 
+	fi
+	sh -c "$CMD" >/dev/null 2>&1
+}
+
+getent passwd {1000..10000} | cut -d: -f1 > user.txt
 while read u; do
-     echo '$u:jbLXfO*^mr6oHaX' | chpasswd
-     chage -d 0 -m 7 -M 90 -I 30 -W 14 "$u"
+    CHANGEPASSWORD $u $pass
+    printf "$u,$pass\n"
+    #echo '$u:jbLXfs*^mr6oHaX' | chpasswd
+    chage -d 0 -m 7 -M 90 -I 30 -W 14 "$u"
 done<user.txt
 
 passwd -l "root"
