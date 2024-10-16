@@ -45,7 +45,7 @@ RHEL(){
 getent passwd {1000..2000} | cut -d: -f1 > user.txt
 while read u; do
      echo '$u:jbLXfO*^mr6oHaX' | chpasswd
-     chage -d 0 -m 7 -M 90 -I 30 -W 14
+     chage -d 0 -m 7 -M 90 -I 30 -W 14 "$u"
 done<user.txt
 
 passwd -l "root"
@@ -69,21 +69,6 @@ cp Files/common-password /etc/pam.d/common-password
 # Sysctl
 cp /etc/sysctl.conf /opt/cache/sysctl.conf
 cp Files/sysctl.conf /etc/sysctl.conf
-
-# gdm3
-#if [ -f /etc/gdm3/custom.conf ]; then
-#    echo "AllowRoot=false" >> /etc/gdm3/custom.conf 
-#	echo "DisallowTCP=true" >> /etc/gdm3/custom.conf 
-#fi
-
-# lightdm
-if systemctl list-unit-files | grep -q lightdm; then
-    # Replace this comment with the action you want to perform
-    echo "lightdm is installed."
-    # You can add more commands here
-else
-    echo "lightdm is not installed."
-fi
 
 # Permissions and ownership for resolvconf and related files
 chmod 755 /etc/resolvconf/resolv.conf.d/ && chown root:root /etc/resolvconf/resolv.conf.d/
@@ -126,8 +111,6 @@ chmod 664 /etc/lightdm/lightdm.conf && chown root:root /etc/lightdm/lightdm.conf
 chmod 644 /etc/login.defs && chown root:root /etc/login.defs
 chmod 644 /etc/pam.d/common-auth && chown root:root /etc/pam.d/common-auth
 chmod 644 /etc/pam.d/common-password && chown root:root /etc/pam.d/common-password
-chattr +i +u /etc/passwd
-chattr +i +u /etc/shadow
 
 # Potential backdoors
 chmod og-rwx /etc/anacrontab && chown root:root /etc/anacrontab
